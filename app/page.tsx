@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import Mapa from "@/components/Mapa";
 import PainelDados, { type DadosFormulario } from "@/components/PainelDados";
 import Resultado from "@/components/Resultado";
-import { calcularAMT } from "@/lib/calculo";
+import { calcularAMT, calcularComprimentoSugerido } from "@/lib/calculo";
 import { distanciaEntrePontosM, type Ponto } from "@/lib/geo";
 import { escreverNumero, lerNumero, lerNumeroOuNulo } from "@/lib/numero";
 import type { TipoPonto } from "@/lib/tipos";
@@ -19,6 +19,7 @@ const DADOS_INICIAIS: DadosFormulario = {
   diametro: '1"',
   material: "pvc",
   comprimento: "",
+  folgaTracado: "15",
 };
 
 export default function Home() {
@@ -33,6 +34,44 @@ export default function Home() {
     [poco, reservatorio],
   );
 
+  const altitudePocoM = lerNumeroOuNulo(dados.altitudePoco);
+  const altitudeReservatorioM = lerNumeroOuNulo(dados.altitudeReservatorio);
+
+  /**
+   * A distancia do mapa e so a projecao horizontal. O tubo ainda desce o poco,
+   * acompanha o desnivel do terreno e sobe a torre — mais a folga de tracado.
+   */
+  const sugestaoComprimento = useMemo(() => {
+    if (distanciaMapaM === null) return null;
+    return calcularComprimentoSugerido({
+      distanciaHorizontalM: distanciaMapaM,
+      nivelDinamicoM: lerNumero(dados.nivelDinamico),
+      alturaCaixaM: lerNumero(dados.alturaCaixa),
+      desnivelGeograficoM:
+        altitudePocoM !== null && altitudeReservatorioM !== null
+          ? altitudeReservatorioM - altitudePocoM
+          : 0,
+      folgaTracado: lerNumero(dados.folgaTracado) / 100,
+    });
+  }, [
+    distanciaMapaM,
+    dados.nivelDinamico,
+    dados.alturaCaixa,
+    dados.folgaTracado,
+    altitudePocoM,
+    altitudeReservatorioM,
+  ]);
+
+  /**
+   * Enquanto o vendedor nao digitar um comprimento proprio, o campo acompanha a
+   * sugestao — que muda junto com o nivel dinamico, a altura da caixa e a folga.
+   */
+  useEffect(() => {
+    if (comprimentoEditado || !sugestaoComprimento) return;
+    const texto = escreverNumero(sugestaoComprimento.totalM);
+    setDados((atual) => (atual.comprimento === texto ? atual : { ...atual, comprimento: texto }));
+  }, [comprimentoEditado, sugestaoComprimento]);
+
   /* --------------------------------- eventos -------------------------------- */
 
   const alterarCampo = useCallback(
@@ -44,27 +83,15 @@ export default function Home() {
   );
 
   /** Clique no mapa ou arraste de marcador: reposiciona o ponto e recalcula. */
-  const definirPonto = useCallback(
-    (tipo: TipoPonto, ponto: Ponto) => {
-      const outro = tipo === "poco" ? reservatorio : poco;
-
-      if (tipo === "poco") {
-        setPoco(ponto);
-        setDados((atual) => ({ ...atual, altitudePoco: "" }));
-      } else {
-        setReservatorio(ponto);
-        setDados((atual) => ({ ...atual, altitudeReservatorio: "" }));
-      }
-
-      // Enquanto o vendedor nao mexer no campo, o comprimento acompanha o mapa.
-      if (outro && !comprimentoEditado) {
-        const a = tipo === "poco" ? ponto : outro;
-        const b = tipo === "poco" ? outro : ponto;
-        setDados((atual) => ({ ...atual, comprimento: escreverNumero(distanciaEntrePontosM(a, b)) }));
-      }
-    },
-    [poco, reservatorio, comprimentoEditado],
-  );
+  const definirPonto = useCallback((tipo: TipoPonto, ponto: Ponto) => {
+    if (tipo === "poco") {
+      setPoco(ponto);
+      setDados((atual) => ({ ...atual, altitudePoco: "" }));
+    } else {
+      setReservatorio(ponto);
+      setDados((atual) => ({ ...atual, altitudeReservatorio: "" }));
+    }
+  }, []);
 
   const definirAltitude = useCallback((tipo: TipoPonto, altitude: number | null) => {
     const texto = altitude === null ? "" : escreverNumero(altitude);
@@ -85,11 +112,11 @@ export default function Home() {
     }));
   }, []);
 
-  const usarDistanciaDoMapa = useCallback(() => {
-    if (distanciaMapaM === null) return;
+  const usarComprimentoSugerido = useCallback(() => {
+    if (!sugestaoComprimento) return;
     setComprimentoEditado(false);
-    setDados((atual) => ({ ...atual, comprimento: escreverNumero(distanciaMapaM) }));
-  }, [distanciaMapaM]);
+    setDados((atual) => ({ ...atual, comprimento: escreverNumero(sugestaoComprimento.totalM) }));
+  }, [sugestaoComprimento]);
 
   /* -------------------------------- resultado ------------------------------- */
 
@@ -97,15 +124,15 @@ export default function Home() {
     () =>
       calcularAMT({
         nivelDinamicoM: lerNumero(dados.nivelDinamico),
-        altitudePocoM: lerNumeroOuNulo(dados.altitudePoco),
-        altitudeReservatorioM: lerNumeroOuNulo(dados.altitudeReservatorio),
+        altitudePocoM,
+        altitudeReservatorioM,
         alturaCaixaM: lerNumero(dados.alturaCaixa),
         vazaoLh: lerNumero(dados.vazao),
         diametro: dados.diametro,
         material: dados.material,
         comprimentoTubulacaoM: lerNumero(dados.comprimento),
       }),
-    [dados],
+    [dados, altitudePocoM, altitudeReservatorioM],
   );
 
   const proximoPonto: TipoPonto | null = !poco ? "poco" : !reservatorio ? "reservatorio" : null;
@@ -166,8 +193,9 @@ export default function Home() {
             poco={poco}
             reservatorio={reservatorio}
             distanciaMapaM={distanciaMapaM}
+            sugestaoComprimento={sugestaoComprimento}
             comprimentoEditado={comprimentoEditado}
-            onUsarDistanciaDoMapa={usarDistanciaDoMapa}
+            onUsarComprimentoSugerido={usarComprimentoSugerido}
             carregandoAltitude={carregandoAltitude}
           />
           <p className="pb-1 text-[11px] leading-snug text-slate-500">

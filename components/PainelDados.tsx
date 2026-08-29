@@ -5,6 +5,7 @@ import {
   DIAMETROS,
   DIAMETRO_INTERNO_MM,
   MATERIAIS,
+  type ComprimentoSugerido,
   type DiametroNominal,
   type MaterialTubulacao,
 } from "@/lib/calculo";
@@ -20,6 +21,8 @@ export interface DadosFormulario {
   diametro: DiametroNominal;
   material: MaterialTubulacao;
   comprimento: string;
+  /** Folga de tracado em porcentagem (o campo mostra "15", nao "0,15"). */
+  folgaTracado: string;
 }
 
 interface PainelDadosProps {
@@ -28,8 +31,9 @@ interface PainelDadosProps {
   poco: Ponto | null;
   reservatorio: Ponto | null;
   distanciaMapaM: number | null;
+  sugestaoComprimento: ComprimentoSugerido | null;
   comprimentoEditado: boolean;
-  onUsarDistanciaDoMapa: () => void;
+  onUsarComprimentoSugerido: () => void;
   carregandoAltitude: boolean;
 }
 
@@ -68,14 +72,76 @@ function LinhaPonto({
   );
 }
 
+/** Mostra de onde saiu o comprimento sugerido, parcela por parcela. */
+function ComposicaoComprimento({ sugestao }: { sugestao: ComprimentoSugerido | null }) {
+  if (!sugestao) {
+    return (
+      <div className="grid place-items-center rounded-xl border border-dashed border-slate-200 p-3 text-center text-[11px] leading-snug text-slate-400">
+        A composicao do comprimento aparece aqui depois que o poco e o reservatorio
+        estiverem no mapa.
+      </div>
+    );
+  }
+
+  const parcelas = [
+    { rotulo: "Distancia no mapa (A→B)", valor: sugestao.distanciaHorizontalM },
+    { rotulo: "Descida no poco (nivel dinamico)", valor: sugestao.descidaPocoM },
+    { rotulo: "Subida ate a caixa", valor: sugestao.subidaCaixaM },
+    { rotulo: "Desnivel do terreno", valor: sugestao.desnivelPercorridoM },
+  ];
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        Comprimento sugerido
+      </p>
+
+      <dl className="mt-1.5 space-y-1">
+        {parcelas.map((parcela) => (
+          <div key={parcela.rotulo} className="flex items-baseline justify-between gap-2">
+            <dt className="text-[11px] leading-snug text-slate-600">{parcela.rotulo}</dt>
+            <dd className="shrink-0 font-mono text-[11px] tabular-nums text-slate-700">
+              {formatarNumero(parcela.valor, 1)} m
+            </dd>
+          </div>
+        ))}
+
+        <div className="flex items-baseline justify-between gap-2 border-t border-slate-200 pt-1">
+          <dt className="text-[11px] leading-snug text-slate-600">Subtotal</dt>
+          <dd className="shrink-0 font-mono text-[11px] tabular-nums text-slate-700">
+            {formatarNumero(sugestao.subtotalM, 1)} m
+          </dd>
+        </div>
+
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-[11px] leading-snug text-slate-600">
+            Folga de tracado ({formatarNumero(sugestao.folgaTracado * 100, 0)}%)
+          </dt>
+          <dd className="shrink-0 font-mono text-[11px] tabular-nums text-slate-700">
+            + {formatarNumero(sugestao.folgaM, 1)} m
+          </dd>
+        </div>
+
+        <div className="flex items-baseline justify-between gap-2 border-t-2 border-slate-300 pt-1">
+          <dt className="text-[11px] font-bold text-slate-900">Sugerido</dt>
+          <dd className="shrink-0 font-mono text-xs font-bold tabular-nums text-slate-900">
+            {formatarNumero(sugestao.totalM, 1)} m
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
 export default function PainelDados({
   dados,
   onChange,
   poco,
   reservatorio,
   distanciaMapaM,
+  sugestaoComprimento,
   comprimentoEditado,
-  onUsarDistanciaDoMapa,
+  onUsarComprimentoSugerido,
   carregandoAltitude,
 }: PainelDadosProps) {
   return (
@@ -181,6 +247,44 @@ export default function PainelDados({
           />
 
           <div>
+            <label htmlFor="diametro" className="block text-xs font-semibold text-slate-700">
+              Diametro da tubulacao
+            </label>
+            <select
+              id="diametro"
+              value={dados.diametro}
+              onChange={(e) => onChange("diametro", e.target.value as DiametroNominal)}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-agua-500 focus:ring-2 focus:ring-agua-100"
+            >
+              {DIAMETROS.map((bitola) => (
+                <option key={bitola} value={bitola}>
+                  {bitola} — {formatarNumero(DIAMETRO_INTERNO_MM[bitola], 1)} mm internos
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label htmlFor="material" className="block text-xs font-semibold text-slate-700">
+              Material da tubulacao
+            </label>
+            <select
+              id="material"
+              value={dados.material}
+              onChange={(e) => onChange("material", e.target.value as MaterialTubulacao)}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-agua-500 focus:ring-2 focus:ring-agua-100"
+            >
+              {MATERIAIS.map((m) => (
+                <option key={m.valor} value={m.valor}>
+                  {m.rotulo} — C = {m.c}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
+          <div>
             <label htmlFor="comprimento" className="block text-xs font-semibold text-slate-700">
               Comprimento da tubulacao
             </label>
@@ -200,60 +304,38 @@ export default function PainelDados({
               </span>
             </div>
             <p className="mt-1 text-[11px] leading-snug text-slate-500">
-              {distanciaMapaM === null ? (
-                "Marque os dois pontos para pre-preencher com a distancia do mapa."
+              {sugestaoComprimento === null ? (
+                "Marque os dois pontos no mapa para receber um comprimento sugerido."
               ) : comprimentoEditado ? (
                 <>
-                  Editado na mao.{" "}
+                  Voce digitou este valor.{" "}
                   <button
                     type="button"
-                    onClick={onUsarDistanciaDoMapa}
+                    onClick={onUsarComprimentoSugerido}
                     className="font-semibold text-agua-700 underline underline-offset-2 hover:text-agua-800"
                   >
-                    usar {formatarNumero(distanciaMapaM, 0)} m do mapa
+                    voltar para {formatarNumero(sugestaoComprimento.totalM, 0)} m
                   </button>
                 </>
               ) : (
-                "Distancia em linha reta do mapa. Some as subidas e curvas se a linha nao for reta."
+                "Sugerido a partir do mapa. Digite por cima se conhecer o tracado real."
               )}
             </p>
+
+            <div className="mt-3">
+              <CampoNumero
+                id="folga-tracado"
+                rotulo="Folga de tracado"
+                unidade="%"
+                valor={dados.folgaTracado}
+                onChange={(v) => onChange("folgaTracado", v)}
+                dica="Curvas, desvios e sobra de corte. Entra so no comprimento sugerido."
+                placeholder="15"
+              />
+            </div>
           </div>
 
-          <div>
-            <label htmlFor="diametro" className="block text-xs font-semibold text-slate-700">
-              Diametro da tubulacao
-            </label>
-            <select
-              id="diametro"
-              value={dados.diametro}
-              onChange={(e) => onChange("diametro", e.target.value as DiametroNominal)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-agua-500 focus:ring-2 focus:ring-agua-100"
-            >
-              {DIAMETROS.map((bitola) => (
-                <option key={bitola} value={bitola}>
-                  {bitola} — {formatarNumero(DIAMETRO_INTERNO_MM[bitola], 1)} mm internos
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="material" className="block text-xs font-semibold text-slate-700">
-              Material da tubulacao
-            </label>
-            <select
-              id="material"
-              value={dados.material}
-              onChange={(e) => onChange("material", e.target.value as MaterialTubulacao)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-agua-500 focus:ring-2 focus:ring-agua-100"
-            >
-              {MATERIAIS.map((m) => (
-                <option key={m.valor} value={m.valor}>
-                  {m.rotulo} — C = {m.c}
-                </option>
-              ))}
-            </select>
-          </div>
+          <ComposicaoComprimento sugestao={sugestaoComprimento} />
         </div>
       </div>
     </div>
