@@ -84,10 +84,14 @@ function ComposicaoComprimento({ sugestao }: { sugestao: ComprimentoSugerido | n
   }
 
   const parcelas = [
-    { rotulo: "Distancia no mapa (A→B)", valor: sugestao.distanciaHorizontalM },
-    { rotulo: "Descida no poco (nivel dinamico)", valor: sugestao.descidaPocoM },
-    { rotulo: "Subida ate a caixa", valor: sugestao.subidaCaixaM },
-    { rotulo: "Desnivel do terreno", valor: sugestao.desnivelPercorridoM },
+    { rotulo: "Distancia no mapa (A→B)", valor: sugestao.distanciaHorizontalM, ausente: false },
+    { rotulo: "Descida no poco (nivel dinamico)", valor: sugestao.descidaPocoM, ausente: false },
+    { rotulo: "Subida ate a caixa", valor: sugestao.subidaCaixaM, ausente: false },
+    // Sem as duas altitudes a parcela entra como 0; a linha atenuada existe para
+    // que essa ausencia nao passe despercebida.
+    sugestao.desnivelInformado
+      ? { rotulo: "Desnivel do terreno", valor: sugestao.desnivelPercorridoM, ausente: false }
+      : { rotulo: "Desnivel do terreno — nao informado", valor: null, ausente: true },
   ];
 
   return (
@@ -99,9 +103,19 @@ function ComposicaoComprimento({ sugestao }: { sugestao: ComprimentoSugerido | n
       <dl className="mt-1.5 space-y-1">
         {parcelas.map((parcela) => (
           <div key={parcela.rotulo} className="flex items-baseline justify-between gap-2">
-            <dt className="text-[11px] leading-snug text-slate-600">{parcela.rotulo}</dt>
-            <dd className="shrink-0 font-mono text-[11px] tabular-nums text-slate-700">
-              {formatarNumero(parcela.valor, 1)} m
+            <dt
+              className={`text-[11px] leading-snug ${
+                parcela.ausente ? "italic text-slate-400" : "text-slate-600"
+              }`}
+            >
+              {parcela.rotulo}
+            </dt>
+            <dd
+              className={`shrink-0 font-mono text-[11px] tabular-nums ${
+                parcela.ausente ? "text-slate-400" : "text-slate-700"
+              }`}
+            >
+              {parcela.valor === null ? "—" : `${formatarNumero(parcela.valor, 1)} m`}
             </dd>
           </div>
         ))}
@@ -129,6 +143,13 @@ function ComposicaoComprimento({ sugestao }: { sugestao: ComprimentoSugerido | n
           </dd>
         </div>
       </dl>
+
+      {!sugestao.desnivelInformado && (
+        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-900">
+          Sugestao incompleta: sem as altitudes de A e B, o desnivel do terreno ficou de
+          fora. O comprimento real deve ser maior.
+        </p>
+      )}
     </div>
   );
 }

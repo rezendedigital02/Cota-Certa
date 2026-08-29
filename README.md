@@ -92,7 +92,12 @@ folga; valores negativos são tratados como 0, para que a folga nunca encurte o 
 
 O painel exibe a composição ao lado do campo — distância no mapa, descida no poço,
 subida até a caixa, desnível do terreno, subtotal, folga e total — para o vendedor
-entender de onde saiu o número. Enquanto ele não digitar um comprimento próprio, o campo
+entender de onde saiu o número.
+
+Quando **falta a altitude de A ou de B**, a parcela do desnível continua valendo 0 (o
+cálculo não muda), mas a linha aparece atenuada como *"desnível do terreno — não
+informado"* e um aviso avisa que a sugestão está incompleta e o comprimento real deve ser
+maior — em vez de a parcela sumir da lista sem explicação. Enquanto ele não digitar um comprimento próprio, o campo
 acompanha a sugestão e se atualiza junto com o nível dinâmico, a altura da caixa e a
 folga; depois de editado na mão, um link devolve o valor sugerido.
 

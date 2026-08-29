@@ -209,3 +209,37 @@ test("sugerido nunca fica menor que a distancia horizontal do mapa", () => {
   assert.equal(c.subtotalM, 326); // 250 + 60 + 4 + 12
   assert.equal(c.totalM, 374.9);
 });
+
+test("sem altitude o desnivel conta 0 e a sugestao fica marcada como incompleta", () => {
+  const semAltitude = calcularComprimentoSugerido({
+    distanciaHorizontalM: 120,
+    nivelDinamicoM: 40,
+    alturaCaixaM: 5,
+    desnivelGeograficoM: null,
+  });
+  assert.equal(semAltitude.desnivelInformado, false);
+  assert.equal(semAltitude.desnivelPercorridoM, 0);
+  assert.equal(semAltitude.subtotalM, 165); // 120 + 40 + 5, sem desnivel
+  assert.equal(semAltitude.totalM, 189.75);
+
+  // o numero e identico ao de um desnivel zero informado: so o flag muda
+  const desnivelZero = calcularComprimentoSugerido({
+    distanciaHorizontalM: 120,
+    nivelDinamicoM: 40,
+    alturaCaixaM: 5,
+    desnivelGeograficoM: 0,
+  });
+  assert.equal(desnivelZero.totalM, semAltitude.totalM);
+  assert.equal(desnivelZero.desnivelInformado, true);
+});
+
+test("desnivel informado marca o flag mesmo sendo negativo", () => {
+  const c = calcularComprimentoSugerido({
+    distanciaHorizontalM: 10,
+    nivelDinamicoM: 0,
+    alturaCaixaM: 0,
+    desnivelGeograficoM: -3,
+  });
+  assert.equal(c.desnivelInformado, true);
+  assert.equal(c.desnivelPercorridoM, 3);
+});

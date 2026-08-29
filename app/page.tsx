@@ -47,10 +47,12 @@ export default function Home() {
       distanciaHorizontalM: distanciaMapaM,
       nivelDinamicoM: lerNumero(dados.nivelDinamico),
       alturaCaixaM: lerNumero(dados.alturaCaixa),
+      // null (e nao 0) quando falta alguma altitude: a conta nao muda, mas o
+      // painel precisa saber que a parcela do desnivel ficou de fora.
       desnivelGeograficoM:
         altitudePocoM !== null && altitudeReservatorioM !== null
           ? altitudeReservatorioM - altitudePocoM
-          : 0,
+          : null,
       folgaTracado: lerNumero(dados.folgaTracado) / 100,
     });
   }, [

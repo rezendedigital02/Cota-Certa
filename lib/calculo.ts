@@ -212,8 +212,13 @@ export interface EntradaComprimento {
   nivelDinamicoM: number;
   /** Altura da caixa acima do solo (m): o tubo sobe a torre. */
   alturaCaixaM: number;
-  /** Desnivel entre A e B (altitude B - altitude A). Entra em valor absoluto. */
-  desnivelGeograficoM: number;
+  /**
+   * Desnivel entre A e B (altitude B - altitude A), em valor absoluto na conta.
+   * Use `null` quando falta a altitude de algum dos dois pontos: a parcela conta
+   * como 0 (a conta nao muda) e o resultado marca `desnivelInformado: false`,
+   * para quem consome saber que a sugestao esta incompleta.
+   */
+  desnivelGeograficoM: number | null;
   /**
    * Folga de tracado, em fracao (0.15 = 15%). Cobre curvas, desvios e sobra de
    * corte. Valores negativos sao tratados como 0 — folga nunca encurta o tubo.
@@ -229,6 +234,11 @@ export interface ComprimentoSugerido {
   subidaCaixaM: number;
   /** Desnivel do terreno percorrido pelo tubo, em valor absoluto. */
   desnivelPercorridoM: number;
+  /**
+   * Falso quando faltou a altitude de A ou de B. A parcela do desnivel entrou
+   * como 0, entao o comprimento real deve ser maior que o sugerido.
+   */
+  desnivelInformado: boolean;
   /** Soma dos trechos, antes da folga. */
   subtotalM: number;
   /** Fracao de folga efetivamente aplicada (ja com o piso em 0). */
@@ -250,7 +260,8 @@ export interface ComprimentoSugerido {
  *             + altura da caixa
  *             + |desnivel A→B|) * (1 + folga de tracado)
  *
- * Funcao pura, sem excecoes: entradas invalidas viram 0.
+ * Funcao pura, sem excecoes: entradas invalidas viram 0. Sem as altitudes, o
+ * desnivel conta como 0 e o retorno marca `desnivelInformado: false`.
  */
 export function calcularComprimentoSugerido(
   entrada: EntradaComprimento,
@@ -258,6 +269,9 @@ export function calcularComprimentoSugerido(
   const distanciaHorizontalM = Math.max(0, numero(entrada.distanciaHorizontalM));
   const descidaPocoM = Math.max(0, numero(entrada.nivelDinamicoM));
   const subidaCaixaM = Math.max(0, numero(entrada.alturaCaixaM));
+  const desnivelInformado =
+    typeof entrada.desnivelGeograficoM === "number" &&
+    Number.isFinite(entrada.desnivelGeograficoM);
   const desnivelPercorridoM = Math.abs(numero(entrada.desnivelGeograficoM));
 
   const folgaTracado = Math.max(
@@ -275,6 +289,7 @@ export function calcularComprimentoSugerido(
     descidaPocoM: arredondar(descidaPocoM, 2),
     subidaCaixaM: arredondar(subidaCaixaM, 2),
     desnivelPercorridoM: arredondar(desnivelPercorridoM, 2),
+    desnivelInformado,
     subtotalM: arredondar(subtotalM, 2),
     folgaTracado,
     folgaM: arredondar(folgaM, 2),
