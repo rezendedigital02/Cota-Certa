@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   DIAMETRO_INTERNO_MM,
   calcularAMT,
+  calcularComprimentoSugerido,
   litrosHoraParaM3Segundo,
   perdaCargaUnitariaHazenWilliams,
   sugerirDiametro,
@@ -128,4 +129,117 @@ test("haversine: 1 grau de latitude ~ 111 km", () => {
   const d = distanciaEntrePontosM({ lat: 0, lng: 0 }, { lat: 1, lng: 0 });
   assert.ok(Math.abs(d - 111_195) < 200);
   assert.equal(distanciaEntrePontosM({ lat: -23.5, lng: -46.6 }, { lat: -23.5, lng: -46.6 }), 0);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Comprimento sugerido                                                        */
+/* -------------------------------------------------------------------------- */
+
+test("comprimento sugerido soma os trechos verticais e a folga", () => {
+  const c = calcularComprimentoSugerido({
+    distanciaHorizontalM: 120,
+    nivelDinamicoM: 40,
+    alturaCaixaM: 5,
+    desnivelGeograficoM: 15,
+  });
+  assert.equal(c.subtotalM, 180); // 120 + 40 + 5 + 15
+  assert.equal(c.folgaTracado, 0.15);
+  assert.equal(c.folgaM, 27);
+  assert.equal(c.totalM, 207);
+});
+
+test("o desnivel entra em valor absoluto: descer tambem gasta tubo", () => {
+  const subindo = calcularComprimentoSugerido({
+    distanciaHorizontalM: 100,
+    nivelDinamicoM: 0,
+    alturaCaixaM: 0,
+    desnivelGeograficoM: 20,
+  });
+  const descendo = calcularComprimentoSugerido({
+    distanciaHorizontalM: 100,
+    nivelDinamicoM: 0,
+    alturaCaixaM: 0,
+    desnivelGeograficoM: -20,
+  });
+  assert.equal(subindo.totalM, descendo.totalM);
+  assert.equal(descendo.desnivelPercorridoM, 20);
+});
+
+test("folga de tracado e configuravel e pode ser zerada", () => {
+  const base = {
+    distanciaHorizontalM: 100,
+    nivelDinamicoM: 0,
+    alturaCaixaM: 0,
+    desnivelGeograficoM: 0,
+  };
+  assert.equal(calcularComprimentoSugerido({ ...base, folgaTracado: 0 }).totalM, 100);
+  assert.equal(calcularComprimentoSugerido({ ...base, folgaTracado: 0.3 }).totalM, 130);
+});
+
+test("folga negativa nao encurta o tubo", () => {
+  const c = calcularComprimentoSugerido({
+    distanciaHorizontalM: 100,
+    nivelDinamicoM: 0,
+    alturaCaixaM: 0,
+    desnivelGeograficoM: 0,
+    folgaTracado: -0.5,
+  });
+  assert.equal(c.folgaTracado, 0);
+  assert.equal(c.totalM, 100);
+});
+
+test("comprimento sugerido tolera entrada vazia ou invalida", () => {
+  const c = calcularComprimentoSugerido({
+    distanciaHorizontalM: Number.NaN,
+    nivelDinamicoM: -10,
+    alturaCaixaM: 0,
+    desnivelGeograficoM: Number.NaN,
+  });
+  assert.equal(c.totalM, 0);
+});
+
+test("sugerido nunca fica menor que a distancia horizontal do mapa", () => {
+  const c = calcularComprimentoSugerido({
+    distanciaHorizontalM: 250,
+    nivelDinamicoM: 60,
+    alturaCaixaM: 4,
+    desnivelGeograficoM: -12,
+  });
+  assert.ok(c.totalM > 250);
+  assert.equal(c.subtotalM, 326); // 250 + 60 + 4 + 12
+  assert.equal(c.totalM, 374.9);
+});
+
+test("sem altitude o desnivel conta 0 e a sugestao fica marcada como incompleta", () => {
+  const semAltitude = calcularComprimentoSugerido({
+    distanciaHorizontalM: 120,
+    nivelDinamicoM: 40,
+    alturaCaixaM: 5,
+    desnivelGeograficoM: null,
+  });
+  assert.equal(semAltitude.desnivelInformado, false);
+  assert.equal(semAltitude.desnivelPercorridoM, 0);
+  assert.equal(semAltitude.subtotalM, 165); // 120 + 40 + 5, sem desnivel
+  assert.equal(semAltitude.totalM, 189.75);
+
+  // o numero e identico ao de um desnivel zero informado: so o flag muda
+  const desnivelZero = calcularComprimentoSugerido({
+    distanciaHorizontalM: 120,
+    nivelDinamicoM: 40,
+    alturaCaixaM: 5,
+    desnivelGeograficoM: 0,
+  });
+  assert.equal(desnivelZero.totalM, semAltitude.totalM);
+  assert.equal(desnivelZero.desnivelInformado, true);
+});
+
+test("desnivel informado marca o flag mesmo sendo negativo", () => {
+  const c = calcularComprimentoSugerido({
+    distanciaHorizontalM: 10,
+    nivelDinamicoM: 0,
+    alturaCaixaM: 0,
+    desnivelGeograficoM: -3,
+  });
+  assert.equal(c.desnivelInformado, true);
+  assert.equal(c.desnivelPercorridoM, 3);
 });

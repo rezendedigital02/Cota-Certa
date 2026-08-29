@@ -52,6 +52,9 @@ export const DIAMETROS: ReadonlyArray<DiametroNominal> = [
 /** Acrescimo padrao sobre a perda distribuida para cobrir perdas localizadas. */
 export const FATOR_PERDAS_LOCALIZADAS = 0.15;
 
+/** Folga de tracado padrao sobre o comprimento sugerido (curvas, desvios, sobras). */
+export const FOLGA_TRACADO_PADRAO = 0.15;
+
 /** Velocidade recomendada maxima no recalque, em m/s. */
 export const VELOCIDADE_MAXIMA_MS = 2;
 
@@ -194,13 +197,109 @@ export function arredondar(valor: number, casas = 2): number {
   return Object.is(r, -0) ? 0 : r;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Calculo principal                                                           */
-/* -------------------------------------------------------------------------- */
-
 function numero(valor: number | null | undefined): number {
   return typeof valor === "number" && Number.isFinite(valor) ? valor : 0;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Comprimento sugerido da tubulacao                                           */
+/* -------------------------------------------------------------------------- */
+
+export interface EntradaComprimento {
+  /** Distancia horizontal entre o poco (A) e o reservatorio (B), em metros. */
+  distanciaHorizontalM: number;
+  /** Nivel dinamico do poco (m): o tubo desce ate a bomba. */
+  nivelDinamicoM: number;
+  /** Altura da caixa acima do solo (m): o tubo sobe a torre. */
+  alturaCaixaM: number;
+  /**
+   * Desnivel entre A e B (altitude B - altitude A), em valor absoluto na conta.
+   * Use `null` quando falta a altitude de algum dos dois pontos: a parcela conta
+   * como 0 (a conta nao muda) e o resultado marca `desnivelInformado: false`,
+   * para quem consome saber que a sugestao esta incompleta.
+   */
+  desnivelGeograficoM: number | null;
+  /**
+   * Folga de tracado, em fracao (0.15 = 15%). Cobre curvas, desvios e sobra de
+   * corte. Valores negativos sao tratados como 0 — folga nunca encurta o tubo.
+   */
+  folgaTracado?: number;
+}
+
+export interface ComprimentoSugerido {
+  distanciaHorizontalM: number;
+  /** Trecho vertical dentro do poco. */
+  descidaPocoM: number;
+  /** Trecho vertical na torre da caixa. */
+  subidaCaixaM: number;
+  /** Desnivel do terreno percorrido pelo tubo, em valor absoluto. */
+  desnivelPercorridoM: number;
+  /**
+   * Falso quando faltou a altitude de A ou de B. A parcela do desnivel entrou
+   * como 0, entao o comprimento real deve ser maior que o sugerido.
+   */
+  desnivelInformado: boolean;
+  /** Soma dos trechos, antes da folga. */
+  subtotalM: number;
+  /** Fracao de folga efetivamente aplicada (ja com o piso em 0). */
+  folgaTracado: number;
+  /** Metros acrescentados pela folga. */
+  folgaM: number;
+  /** Comprimento sugerido final. */
+  totalM: number;
+}
+
+/**
+ * Comprimento sugerido da tubulacao de recalque.
+ *
+ * A distancia do mapa e so a projecao horizontal: o tubo ainda desce o poco ate
+ * a bomba, acompanha o desnivel do terreno e sobe a torre da caixa.
+ *
+ *   sugerido = (distancia horizontal
+ *             + nivel dinamico
+ *             + altura da caixa
+ *             + |desnivel A→B|) * (1 + folga de tracado)
+ *
+ * Funcao pura, sem excecoes: entradas invalidas viram 0. Sem as altitudes, o
+ * desnivel conta como 0 e o retorno marca `desnivelInformado: false`.
+ */
+export function calcularComprimentoSugerido(
+  entrada: EntradaComprimento,
+): ComprimentoSugerido {
+  const distanciaHorizontalM = Math.max(0, numero(entrada.distanciaHorizontalM));
+  const descidaPocoM = Math.max(0, numero(entrada.nivelDinamicoM));
+  const subidaCaixaM = Math.max(0, numero(entrada.alturaCaixaM));
+  const desnivelInformado =
+    typeof entrada.desnivelGeograficoM === "number" &&
+    Number.isFinite(entrada.desnivelGeograficoM);
+  const desnivelPercorridoM = Math.abs(numero(entrada.desnivelGeograficoM));
+
+  const folgaTracado = Math.max(
+    0,
+    typeof entrada.folgaTracado === "number" && Number.isFinite(entrada.folgaTracado)
+      ? entrada.folgaTracado
+      : FOLGA_TRACADO_PADRAO,
+  );
+
+  const subtotalM = distanciaHorizontalM + descidaPocoM + subidaCaixaM + desnivelPercorridoM;
+  const folgaM = subtotalM * folgaTracado;
+
+  return {
+    distanciaHorizontalM: arredondar(distanciaHorizontalM, 2),
+    descidaPocoM: arredondar(descidaPocoM, 2),
+    subidaCaixaM: arredondar(subidaCaixaM, 2),
+    desnivelPercorridoM: arredondar(desnivelPercorridoM, 2),
+    desnivelInformado,
+    subtotalM: arredondar(subtotalM, 2),
+    folgaTracado,
+    folgaM: arredondar(folgaM, 2),
+    totalM: arredondar(subtotalM + folgaM, 2),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Calculo principal                                                           */
+/* -------------------------------------------------------------------------- */
 
 /**
  * Calcula a Altura Manometrica Total (AMT) e todas as parcelas que a compoem.
